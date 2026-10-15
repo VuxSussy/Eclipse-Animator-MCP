@@ -11,7 +11,7 @@ test('tool call round-trips through the Studio bridge', async () => {
   const client = new Client({ name: 'test', version: '0' })
   await client.connect(new StdioClientTransport({ command: process.execPath, args: ['server.js'], env: { ...process.env, ECLIPSE_MCP_PORT: PORT } }))
   const { tools } = await client.listTools()
-  assert.deepEqual(tools.map(t => t.name).sort(), ['get_animation', 'list_rigs', 'save_animation'])
+  assert.deepEqual(tools.map(t => t.name).sort(), ['enhance_animation', 'get_animation', 'import_animation_pack', 'list_rigs', 'preview_animation', 'save_animation', 'video_to_animation'])
 
   // fake plugin: answer one command successfully, one with an error
   const plugin = (async () => {
@@ -30,4 +30,25 @@ test('tool call round-trips through the Studio bridge', async () => {
   assert.match(bad.content[0].text, /rig not found/)
   await plugin
   await client.close()
+})
+
+test('a second MCP instance on the same port relays through the first', async () => {
+  const start = async () => {
+    const c = new Client({ name: 'test', version: '0' })
+    await c.connect(new StdioClientTransport({ command: process.execPath, args: ['server.js'], env: { ...process.env, ECLIPSE_MCP_PORT: PORT } }))
+    return c
+  }
+  const first = await start()
+  const second = await start() // its port is taken, so it must relay
+  const plugin = (async () => {
+    let res
+    do res = await fetch(`${URL}/poll`).catch(() => null); while (!res || res.status !== 200)
+    const cmd = await res.json()
+    await fetch(`${URL}/result`, { method: 'POST', body: JSON.stringify({ id: cmd.id, ok: true, result: cmd.tool }) })
+  })()
+  const out = await second.callTool({ name: 'list_rigs', arguments: {} })
+  assert.equal(JSON.parse(out.content[0].text), 'list_rigs')
+  await plugin
+  await second.close()
+  await first.close()
 })
