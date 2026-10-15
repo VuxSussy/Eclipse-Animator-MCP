@@ -1,0 +1,19 @@
+{
+  "name": "eclipse-animator-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets AI agents read and write Roblox animations for Eclipse Animator",
+  "main": "server.js",
+  "scripts": {
+    "test": "node --test test.js"
+  },
+  "author": "VuxSussy",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "bin": {
+    "eclipse-animator-mcp": "server.js"
+  }
+}
