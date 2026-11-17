@@ -442,13 +442,22 @@ function handlers.list_rigs()
 end
 
 function handlers.get_animation(args)
-	local seq = getSequence(findRig(args.rig), args.name)
+	local rig = findRig(args.rig)
+	local seq = getSequence(rig, args.name)
+	-- only parts and bones a joint drives: imported animations can carry extra root poses (an
+	-- armature node such as "PhoenixRig") that save_animation could not put back on the rig
+	local driven, ignored = {}, {}
+	for _, m in select(2, rigJoints(rig)) do
+		driven[m.Part1.Name] = true
+	end
 	local keyframes = {}
 	for _, kf in seq:GetKeyframes() do
 		local poses = {}
 		local function walk(list)
 			for _, p in list do
-				if p.Weight > 0 then
+				if p.Weight > 0 and not driven[p.Name] then
+					ignored[p.Name] = true
+				elseif p.Weight > 0 then
 					local rx, ry, rz = p.CFrame:ToEulerAnglesXYZ()
 					local pos = p.CFrame.Position
 					poses[p.Name] = {
@@ -467,7 +476,11 @@ function handlers.get_animation(args)
 	table.sort(keyframes, function(a, b)
 		return a.time < b.time
 	end)
-	return { loop = seq.Loop, priority = seq.Priority.Name, keyframes = keyframes }
+	local skipped = {}
+	for name in ignored do
+		table.insert(skipped, name)
+	end
+	return { loop = seq.Loop, priority = seq.Priority.Name, keyframes = keyframes, ignored = #skipped > 0 and skipped or nil }
 end
 
 function handlers.save_animation(args)
@@ -501,6 +514,16 @@ function handlers.preview_animation(args)
 	local track = animator:LoadAnimation(anim)
 	track.Looped = true
 	track:Play(0)
+	local hold = args.at -- freeze on one moment instead of playing
+	if hold then
+		local waited = 0
+		while track.Length == 0 and waited < 3 do
+			waited += task.wait()
+		end
+		track:AdjustSpeed(0)
+		track.TimePosition = math.clamp(hold, 0, track.Length)
+		animator:StepAnimations(0)
+	end
 	local conn
 	local function stop()
 		conn:Disconnect()
@@ -520,12 +543,17 @@ function handlers.preview_animation(args)
 		if left <= 0 or not rig.Parent then
 			return stop()
 		end
-		animator:StepAnimations(dt)
+		animator:StepAnimations(hold and 0 or dt)
 	end)
 	previewing[rig] = stop
 	game:GetService("Selection"):Set({ rig })
 	note("Previewing " .. seq.Name)
-	return { playing = seq.Name, seconds = args.seconds or 6, tip = "Look at the rig in the Studio viewport." }
+	return {
+		playing = seq.Name,
+		seconds = args.seconds or 6,
+		at = hold and track.TimePosition or nil,
+		tip = "Look at the rig in the Studio viewport.",
+	}
 end
 
 function handlers.retarget(args)

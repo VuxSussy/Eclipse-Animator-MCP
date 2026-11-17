@@ -184,7 +184,7 @@ server.registerTool('list_rigs', {
 server.registerTool('get_animation', {
   title: 'Read animation',
   annotations: { readOnlyHint: true, openWorldHint: false },
-  description: 'Read a saved animation as JSON keyframes (same shape save_animation takes).',
+  description: 'Read a saved animation as JSON keyframes (same shape save_animation takes, so it can be edited and saved back). Poses no joint drives (e.g. an imported armature root) are left out and named in ignored.',
   inputSchema: { rig, name: z.string() },
 }, text('get_animation'))
 server.registerTool('save_animation', {
@@ -197,7 +197,11 @@ server.registerTool('preview_animation', {
   title: 'Preview animation',
   annotations: { readOnlyHint: true, openWorldHint: false },
   description: 'Play a saved animation on the rig in the Studio viewport (no playtest needed), then return the rig to its rest pose.',
-  inputSchema: { rig, name: z.string(), seconds: z.number().min(1).max(60).optional().describe('How long to play. Default 6.') },
+  inputSchema: {
+    rig, name: z.string(),
+    seconds: z.number().min(1).max(60).optional().describe('How long to play (or hold). Default 6.'),
+    at: z.number().min(0).optional().describe('Hold the pose at this time in seconds instead of playing: to check one moment, or for a screenshot.'),
+  },
 }, text('preview_animation'))
 server.registerTool('enhance_animation', {
   title: 'Enhance animation',
