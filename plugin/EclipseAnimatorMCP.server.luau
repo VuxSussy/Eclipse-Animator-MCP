@@ -42,7 +42,7 @@ end)
 
 local connected, log = false, {}
 local function render()
-	label.Text = (connected and "● Connected to the AI app\n" or "○ Waiting for the AI app (open Claude)...\n")
+	label.Text = (connected and "● Connected to the AI app\n" or "○ Waiting for the AI app (open your AI app)...\n")
 		.. "\n"
 		.. table.concat(log, "\n")
 end

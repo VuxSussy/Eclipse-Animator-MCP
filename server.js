@@ -69,7 +69,7 @@ const bridge = http.createServer((req, res) => {
     })
     return
   }
-  if (req.method === 'POST' && req.url === '/send') { // another MCP instance (e.g. a second Claude window) relaying through us
+  if (req.method === 'POST' && req.url === '/send') { // another MCP instance (e.g. a second AI app window) relaying through us
     let body = ''
     req.on('data', c => { body += c })
     req.on('end', async () => {

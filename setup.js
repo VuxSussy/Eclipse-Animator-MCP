@@ -1,4 +1,4 @@
-// One-step setup: Studio plugin, Claude Desktop / Claude Code config, video tools. Run: node setup.js
+// One-step setup: Studio plugin, AI app config (desktop app and CLI), video tools. Run: node setup.js
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -28,12 +28,12 @@ if (fs.existsSync(desktop)) {
   if (fs.existsSync(file)) fs.copyFileSync(file, file + '.bak')
   config.mcpServers = { ...config.mcpServers, 'eclipse-animator': entry }
   fs.writeFileSync(file, JSON.stringify(config, null, 2))
-  console.log('✓ Added to Claude Desktop')
+  console.log('✓ Added to the desktop AI app')
 }
 if (has('claude')) {
   try { execFileSync('claude', ['mcp', 'remove', 'eclipse-animator', '--scope', 'user'], { stdio: 'ignore' }) } catch {}
   execFileSync('claude', ['mcp', 'add', 'eclipse-animator', '--scope', 'user', '--', entry.command, ...entry.args], { stdio: 'ignore' })
-  console.log('✓ Added to Claude Code')
+  console.log('✓ Added to the AI command-line app')
 }
 
 if (has('uv') && has('ffmpeg', '-version')) {
@@ -45,4 +45,4 @@ if (has('uv') && has('ffmpeg', '-version')) {
   console.log(win ? '    winget install astral-sh.uv Gyan.FFmpeg' : '    brew install uv ffmpeg')
 }
 
-console.log('\nDone. Restart Roblox Studio and Claude. In Studio, click Allow when the plugin asks about HTTP requests.')
+console.log('\nDone. Restart Roblox Studio and your AI app. In Studio, click Allow when the plugin asks about HTTP requests.')
