@@ -6,6 +6,7 @@ local AssetService = game:GetService("AssetService")
 local InsertService = game:GetService("InsertService")
 local Players = game:GetService("Players")
 local KeyframeSequenceProvider = game:GetService("KeyframeSequenceProvider")
+local R6 = require(script:WaitForChild("R6"):WaitForChild("R6Bridge")) -- the R6 animation kit
 
 if RunService:IsRunning() then
 	return
@@ -21,12 +22,17 @@ local widget = plugin:CreateDockWidgetPluginGuiAsync(
 widget.Title = "Eclipse Animator MCP"
 local label = Instance.new("TextLabel")
 label.Size = UDim2.fromScale(1, 1)
-label.BackgroundColor3 = settings().Studio.Theme:GetColor(Enum.StudioStyleGuideColor.MainBackground)
-label.TextColor3 = settings().Studio.Theme:GetColor(Enum.StudioStyleGuideColor.MainText)
+local function applyTheme()
+	local theme = settings().Studio.Theme
+	label.BackgroundColor3 = theme:GetColor(Enum.StudioStyleGuideColor.MainBackground)
+	label.TextColor3 = theme:GetColor(Enum.StudioStyleGuideColor.MainText)
+end
+applyTheme()
+settings().Studio.ThemeChanged:Connect(applyTheme)
 label.TextXAlignment = Enum.TextXAlignment.Left
 label.TextYAlignment = Enum.TextYAlignment.Top
 label.TextWrapped = true
-label.Font = Enum.Font.Gotham
+label.FontFace = Font.fromName("BuilderSans")
 label.TextSize = 14
 label.Parent = widget
 local button = plugin:CreateToolbar("Eclipse Animator MCP"):CreateButton("AI Status", "Show the Eclipse Animator MCP status window", "")
@@ -65,10 +71,13 @@ local function findRig(name)
 end
 
 -- root part and its joints ordered parents-first
--- A joint is a Motor6D or, on rigs from Roblox's avatar joint upgrade, an AnimationConstraint.
--- Both pose Part1 as Part0 * C0 * Transform * C1:Inverse().
--- shortcut: no Bone rigs, add Bones when a skinned rig needs it.
+-- A joint is a Motor6D, an AnimationConstraint (Roblox's avatar joint upgrade) or a Bone (skinned
+-- meshes: creatures, wings, tails). All pose Part1 as Part0 * C0 * Transform * C1:Inverse(); a Bone
+-- is its own Part1, posed against its parent (a part or another bone) with C0 = Bone.CFrame.
 local function asJoint(d)
+	if d:IsA("Bone") and (d.Parent:IsA("BasePart") or d.Parent:IsA("Bone")) then
+		return { inst = d, Name = d.Name, Part0 = d.Parent, Part1 = d, C0 = d.CFrame, C1 = CFrame.identity, bone = true }
+	end
 	if d:IsA("Motor6D") and d.Part0 and d.Part1 then
 		return { inst = d, Name = d.Name, Part0 = d.Part0, Part1 = d.Part1, C0 = d.C0, C1 = d.C1 }
 	end
@@ -81,7 +90,7 @@ end
 local function rigJoints(rig)
 	local children, isChild = {}, {}
 	for _, d in rig:GetDescendants() do
-		local j = not d:FindFirstAncestor("AnimSaves") and asJoint(d)
+		local j = not d:FindFirstAncestor("AnimSaves") and not d:FindFirstAncestorWhichIsA("KeyframeSequence") and asJoint(d)
 		if j then
 			children[j.Part0] = children[j.Part0] or {}
 			table.insert(children[j.Part0], j)
@@ -123,6 +132,9 @@ end
 local function getSequence(rig, name)
 	local saves = rig:FindFirstChild("AnimSaves")
 	local seq = saves and saves:FindFirstChild(name)
+	if not (seq and seq:IsA("KeyframeSequence")) then
+		seq = rig:FindFirstChild(name) -- some rigs keep their animations directly inside the model
+	end
 	if not (seq and seq:IsA("KeyframeSequence")) then
 		error("no animation named " .. tostring(name) .. " on " .. rig.Name .. ". Call list_rigs to see its animations.", 0)
 	end
@@ -377,9 +389,9 @@ function handlers.list_rigs()
 	local rigs = {}
 	for _, d in workspace:GetDescendants() do
 		if isRig(d) then
-			local parts, anims = {}, {}
+			local parts, bones, anims = {}, {}, {}
 			for _, m in select(2, rigJoints(d)) do
-				table.insert(parts, m.Part1.Name)
+				table.insert(m.bone and bones or parts, m.Part1.Name)
 			end
 			table.sort(parts)
 			local saves = d:FindFirstChild("AnimSaves")
@@ -388,7 +400,13 @@ function handlers.list_rigs()
 					table.insert(anims, s.Name)
 				end
 			end
-			table.insert(rigs, { rig = d:GetFullName(), parts = parts, animations = anims })
+			for _, s in d:GetChildren() do
+				if s:IsA("KeyframeSequence") then
+					table.insert(anims, s.Name)
+				end
+			end
+			-- bones stay parents-first (Root, Body, Wing1_L, Wing2_L...): their order says the chain
+			table.insert(rigs, { rig = d:GetFullName(), r6 = R6.isR6(d), parts = parts, bones = #bones > 0 and bones or nil, animations = anims })
 		end
 	end
 	return rigs
@@ -526,6 +544,60 @@ function handlers.import_pack(args)
 		table.insert(results, ok and result or { failed = a.name, error = tostring(result) })
 	end
 	return { pack = packName, animations = results }
+end
+
+-- R6 kit: named angles + slides, curve/tension/weight timing, audited before saving
+local function r6Rig(name)
+	local rig = findRig(name)
+	if not R6.isR6(rig) then
+		error(rig.Name .. " is not a six-part R6 rig (Torso, Head, Left/Right Arm, Left/Right Leg). Use save_animation instead.", 0)
+	end
+	return rig
+end
+
+local function saveAudited(rig, seq, audit)
+	local out = saveSequence(rig, seq)
+	out.audit = audit
+	return out
+end
+
+function handlers.save_r6_animation(args)
+	local rig = r6Rig(args.rig)
+	local seq, audit = R6.build(args)
+	if args.require_clean and not audit.ok then
+		seq:Destroy()
+		error("not saved, the audit found problems:\n- " .. table.concat(audit.notes, "\n- "), 0)
+	end
+	return saveAudited(rig, seq, audit)
+end
+
+function handlers.study_animation(args)
+	local seq = getSequence(findRig(args.rig), args.name)
+	return R6.study(seq, { keys = args.frames, fit = args.fit, tip = args.tip, rootLegs = args.root_legs })
+end
+
+function handlers.smooth_r6_animation(args)
+	local rig = r6Rig(args.rig)
+	local seq, audit = R6.smooth(getSequence(rig, args.name), {
+		name = args.new_name or (args.name .. " Smooth"),
+		tension = args.tension,
+		weight = args.weight,
+		tolerance = args.tolerance,
+	})
+	return saveAudited(rig, seq, audit)
+end
+
+function handlers.import_r6_kit(args)
+	local rig = r6Rig(args.rig)
+	local results = {}
+	for _, name in args.names or R6.kitNames() do
+		local ok, result = pcall(function()
+			local seq, audit = R6.kit(name)
+			return saveAudited(rig, seq, audit)
+		end)
+		table.insert(results, ok and result or { failed = name, error = tostring(result) })
+	end
+	return results
 end
 
 local active = true

@@ -1,16 +1,21 @@
 {
   "name": "eclipse-animator-mcp",
-  "version": "0.2.0",
-  "description": "MCP server that lets AI agents read and write Roblox animations for Eclipse Animator",
+  "version": "0.3.0",
+  "description": "MCP server that lets AI agents make, smooth and read Roblox animations for Eclipse Animator, with an R6 animation design kit",
   "main": "server.js",
   "scripts": {
-    "test": "node --test test.js enhance.test.js"
+    "test": "node --test test.js enhance.test.js",
+    "test:r6": "lune run test/r6.luau",
+    "sync-r6": "node scripts/sync-r6.js"
   },
   "author": "VuxSussy",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "zod": "^4.6.7"
   },
   "bin": {

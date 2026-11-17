@@ -4,8 +4,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { pluginModel } from './plugin/model.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
+
 const home = os.homedir()
 const win = process.platform === 'win32'
 const has = (cmd, flag = '--version') => { try { execFileSync(cmd, [flag], { stdio: 'ignore' }); return true } catch { return false } }
@@ -15,8 +17,7 @@ const entry = { command: node, args: [path.join(here, 'server.js')] }
 
 const plugins = win ? path.join(process.env.LOCALAPPDATA, 'Roblox', 'Plugins') : path.join(home, 'Documents', 'Roblox', 'Plugins')
 fs.mkdirSync(plugins, { recursive: true })
-const source = fs.readFileSync(path.join(here, 'plugin', 'EclipseAnimatorMCP.server.luau'), 'utf8').replaceAll(']]>', ']]]]><![CDATA[>')
-fs.writeFileSync(path.join(plugins, 'EclipseAnimatorMCP.rbxmx'), '<roblox version="4"><Item class="Script" referent="0"><Properties><string name="Name">EclipseAnimatorMCP</string><ProtectedString name="Source"><![CDATA[' + source + ']]></ProtectedString></Properties></Item></roblox>')
+fs.writeFileSync(path.join(plugins, 'EclipseAnimatorMCP.rbxmx'), pluginModel())
 fs.rmSync(path.join(plugins, 'EclipseAnimatorMCP.lua'), { force: true }) // older installs
 console.log('✓ Roblox Studio plugin installed')
 
