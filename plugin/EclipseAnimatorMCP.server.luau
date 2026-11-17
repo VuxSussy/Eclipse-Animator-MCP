@@ -129,11 +129,48 @@ local function animSaves(rig)
 	return folder
 end
 
-local function getSequence(rig, name)
+-- Roblox's own Animation Editor saves to ServerStorage.RBX_ANIMSAVES.<ObjectValue pointing at the rig>
+local function editorSaves(rig)
+	local list = {}
+	local store = game:GetService("ServerStorage"):FindFirstChild("RBX_ANIMSAVES")
+	for _, link in store and store:GetChildren() or {} do
+		if link:IsA("ObjectValue") and link.Value == rig then
+			for _, ks in link:GetChildren() do
+				if ks:IsA("KeyframeSequence") then
+					table.insert(list, ks)
+				end
+			end
+		end
+	end
+	return list
+end
+
+-- every animation of a rig: AnimSaves (Eclipse Animator), the model itself, the Animation Editor's saves
+local function rigSequences(rig)
+	local list = {}
 	local saves = rig:FindFirstChild("AnimSaves")
-	local seq = saves and saves:FindFirstChild(name)
-	if not (seq and seq:IsA("KeyframeSequence")) then
-		seq = rig:FindFirstChild(name) -- some rigs keep their animations directly inside the model
+	for _, s in saves and saves:GetChildren() or {} do
+		if s:IsA("KeyframeSequence") then
+			table.insert(list, s)
+		end
+	end
+	for _, s in rig:GetChildren() do
+		if s:IsA("KeyframeSequence") then
+			table.insert(list, s)
+		end
+	end
+	local editor = editorSaves(rig)
+	table.move(editor, 1, #editor, #list + 1, list)
+	return list
+end
+
+local function getSequence(rig, name)
+	local seq
+	for _, s in rigSequences(rig) do
+		if s.Name == name then
+			seq = s
+			break
+		end
 	end
 	if not (seq and seq:IsA("KeyframeSequence")) then
 		error("no animation named " .. tostring(name) .. " on " .. rig.Name .. ". Call list_rigs to see its animations.", 0)
@@ -394,16 +431,8 @@ function handlers.list_rigs()
 				table.insert(m.bone and bones or parts, m.Part1.Name)
 			end
 			table.sort(parts)
-			local saves = d:FindFirstChild("AnimSaves")
-			for _, s in saves and saves:GetChildren() or {} do
-				if s:IsA("KeyframeSequence") then
-					table.insert(anims, s.Name)
-				end
-			end
-			for _, s in d:GetChildren() do
-				if s:IsA("KeyframeSequence") then
-					table.insert(anims, s.Name)
-				end
+			for _, s in rigSequences(d) do
+				table.insert(anims, s.Name)
 			end
 			-- bones stay parents-first (Root, Body, Wing1_L, Wing2_L...): their order says the chain
 			table.insert(rigs, { rig = d:GetFullName(), r6 = R6.isR6(d), parts = parts, bones = #bones > 0 and bones or nil, animations = anims })
